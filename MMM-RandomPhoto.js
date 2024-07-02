@@ -8,6 +8,9 @@
  * ICS Licensed.
  */
 
+const _validFileExtensions = [".jpg", ".jpeg", ".bmp", ".gif", ".png", ".tiff"];
+const fileExtensionCheckReg = new RegExp('(' + _validFileExtensions.join('|').replace(/\./g, '\\.') + ')$');
+
 Module.register("MMM-RandomPhoto",{
     defaults: {
         opacity: 0.3,
@@ -42,8 +45,7 @@ Module.register("MMM-RandomPhoto",{
 
     start: function() {
         this.updateTimer = null;
-        this.imageList = null; // Used for nextcloud and localdirectory image list
-		this.folderList = [];
+        this.imageList = []; // Used for nextcloud and localdirectory image list
         this.currentImageIndex = -1; // Used for nextcloud and localdirectory image list
         this.running = false;
 
@@ -393,12 +395,17 @@ Module.register("MMM-RandomPhoto",{
     },
 
     socketNotificationReceived: function(notification, payload) {
-        //Log.log("["+ this.name + "] received a '" + notification + "' with payload: " + payload);
-        //console.dir(payload);
+        // Log.log("["+ this.name + "] received a '" + notification + "' with payload: " + payload);
         if (notification === "IMAGE_LIST") {
-            this.imageList = payload;
+			var images = [];
+			payload.forEach(function(item) {
+				if (fileExtensionCheckReg.test(item)) {
+					images.push(item);
+				}
+			});
+			this.imageList = this.imageList.concat(images);
             // After we now received the image list, go ahead and display them (only when not starting as hidden)
-            if(!this.config.startHidden) {
+            if(this.imageList.length > 0 && !this.config.startHidden) {
                 this.resumeImageLoading(true);
             }
         }

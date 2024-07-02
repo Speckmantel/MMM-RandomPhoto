@@ -4,8 +4,6 @@ const fs = require("fs"); // for localdirectory
 
 const NodeHelper = require("node_helper");
 
-const _validFileExtensions = [".jpg", ".jpeg", ".bmp", ".gif", ".png", ".tiff"];
-
 module.exports = NodeHelper.create({
 
     start: function() {
@@ -23,7 +21,7 @@ module.exports = NodeHelper.create({
     },
 
 
-    socketNotificationReceived: async function(notification, payload) {
+    socketNotificationReceived: function(notification, payload) {
         //console.log("["+ this.name + "] received a '" + notification + "' with payload: " + payload);
         if (notification === "SET_CONFIG") {
             this.config = payload;
@@ -34,19 +32,8 @@ module.exports = NodeHelper.create({
             }
         }
         if (notification === "FETCH_IMAGE_LIST") {
-			var folder = ""
             if (this.config.imageRepository === "nextcloud") {
-                do {
-					if (this.folderList.length > 0) {
-						folder = this.folderList.pop();
-					}
-					[imageList, folderList] = await this.fetchNextcloudImageList(folder);
-					console.log("imageList2 " + imageList);
-					console.log("folderList2 " + folderList);
-					this.imageList = this.imageList.concat(imageList);
-					this.folderList = this.folderList.concat(folderList);
-				} while(this.folderList.length > 0 && this.config.repositoryConfig.recursive)
-				this.sendSocketNotification("IMAGE_LIST", this.imageList);
+				this.fetchNextcloudImageListRecursive();
             }
             if (this.config.imageRepository === "localdirectory") {
                 this.fetchLocalImageList();
@@ -89,6 +76,19 @@ module.exports = NodeHelper.create({
         return false;
     },
 
+	fetchNextcloudImageListRecursive: async function () {
+		var folder = ""
+		do {
+			if (this.folderList.length > 0) {
+				folder = this.folderList.pop();
+			}
+			[imageList, folderList] = await this.fetchNextcloudImageList(folder);
+			if (imageList.length > 0) {
+				this.sendSocketNotification("IMAGE_LIST", imageList);
+			}
+			this.folderList = this.folderList.concat(folderList);
+		} while(this.folderList.length > 0 && this.config.repositoryConfig.recursive)
+	},
 
     fetchNextcloudImageList: async function(folder="") {
         var self = this;
@@ -97,11 +97,8 @@ module.exports = NodeHelper.create({
 		var folderList = [];
         var path = self.config.repositoryConfig.path;
 
-		console.log("executed nextcould fetch");
-
         var urlParts = new URL(path);
 		if (folder != "") {
-			console.log("reached this point");
 			path = path.replace(urlParts.pathname, folder);
 			urlParts = new URL(path);
 		}
@@ -111,35 +108,28 @@ module.exports = NodeHelper.create({
                 "Authorization": "Basic " + new Buffer.from(this.config.repositoryConfig.username + ":" + this.config.repositoryConfig.password).toString("base64")
             }
         };
-		console.log("path " + path);
-		console.log("folder " + folder);
-		console.log("url " + urlParts.host);
         return new Promise((resolve) => {
 			https.get(path, requestOptions, function(response) {
 				var body = "";
-				console.log("sending request");
 				response.on("data", function(data) {
 					body += data;
 				});
 				response.on("end", function() {
 					imageList = body.match(/href>\/[^<]+/g);
 					imageList.shift(); // delete first array entry, because it contains the link to the current folder
-					// if (imageList && imageList.length > 0) {
-						imageList.forEach(function(item, index) {
-							// remove clutter from the entry -> only save file name with path
-							filePath = item.replace("href>", "");
-							if (filePath.endsWith("/")) {
-								folderList.push(filePath);
-							} else {
-								imageListClean.push(filePath);
-							}
-							//console.log("[" + self.name + "] Found entry: " + this.imageList[index]);
-						});
-						resolve([imageListClean, folderList]);
-					// } else {
-					// 	console.log("[" + this.name + "]: did not get any images from nextcloud url");
-					// 	return false;
-					// }
+					imageList.forEach(function(item, index) {
+						// remove clutter from the entry -> only save file name with path
+						filePath = item.replace("href>", "");
+						if (filePath.endsWith("/")) {
+							folderList.push(filePath);
+						} else {
+							imageListClean.push(filePath);
+						}
+					});
+					if (imageList.length == 0){
+						console.log("Empty nextcloud directory: " + filePath);
+					}
+					resolve([imageListClean, folderList]);
 				});
 			}).on("error", function(err) {
 					console.log("[MMM-RandomPhoto] ERROR: " + err);
@@ -169,7 +159,6 @@ module.exports = NodeHelper.create({
                 };
 				urlParts = new URL(self.config.repositoryConfig.path)
 				var path = self.config.repositoryConfig.path.replace(urlParts.pathname, fullImagePath);
-				console.log("loading image: " + path);
                 https.get(path, requestOptions, (response) => {
                     response.setEncoding('base64');
                     var fileEncoded = "data:" + response.headers["content-type"] + ";base64,";
@@ -199,10 +188,4 @@ module.exports = NodeHelper.create({
         });
         **/
     },
-
-	hasExtension: function(inputID, exts) {
-		var fileName = document.getElementById(inputID).value;
-		return (new RegExp('(' + exts.join('|').replace(/\./g, '\\.') + ')$')).test(fileName);
-	},
-
 });
