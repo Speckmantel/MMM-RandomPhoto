@@ -43,6 +43,7 @@ Module.register("MMM-RandomPhoto",{
     start: function() {
         this.updateTimer = null;
         this.imageList = null; // Used for nextcloud and localdirectory image list
+		this.folderList = [];
         this.currentImageIndex = -1; // Used for nextcloud and localdirectory image list
         this.running = false;
 
@@ -107,7 +108,7 @@ Module.register("MMM-RandomPhoto",{
         if (self.localdirectory || self.nextcloud) {
             if (self.imageList && self.imageList.length > 0) {
                 url = "/" + this.name + "/images/" + this.returnImageFromList(mode);
-                
+
                 jQuery.ajax({
                     method: "GET",
                     url: url,
